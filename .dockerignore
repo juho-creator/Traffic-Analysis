@@ -1,0 +1,17 @@
+.git
+.venv
+venv
+__pycache__
+*.pyc
+db.sqlite3
+media
+staticfiles
+weights
+*.pt
+*.mp4
+*.mov
+*.avi
+*.mkv
+output
+.vscode
+.idea

@@ -98,8 +98,33 @@ python manage.py test
 | `TRAFFIC_MEDIA_ROOT`   | `media/`               | Where videos and results go      |
 | `TRAFFIC_WEIGHTS_DIR`  | `weights/`             | Where YOLO weights are saved     |
 
-The defaults suit running on your own computer. The development server and in-process
-background thread are not meant for a shared production server.
+| `DJANGO_DB_PATH`       | `db.sqlite3`           | Where the database file goes     |
+| `DJANGO_CSRF_TRUSTED_ORIGINS` | none            | Extra allowed origins, e.g. `https://example.com` |
+| `DJANGO_BEHIND_HTTPS_PROXY` | off               | Set to `1` behind a host's HTTPS proxy |
+
+The defaults suit running on your own computer.
+
+## Deploy
+
+The app needs one long-running server with its own disk: processing a video takes
+minutes, runs in a background thread, and writes the database, videos and results to
+disk. **Serverless hosts such as Vercel cannot run it.** Their functions stop within
+minutes, accept uploads of only a few MB, have no lasting disk, and have a 500 MB size
+limit that PyTorch (needed by YOLO) exceeds on its own.
+
+Use a host that runs a Docker container, such as Railway, Render, Fly.io, Hugging Face
+Spaces (Docker) or your own server. The `Dockerfile` installs the CPU-only PyTorch,
+downloads the YOLO weights, and starts the app with gunicorn on `$PORT` (default 8000).
+
+```bash
+docker build -t traffic-analysis .
+docker run -p 8000:8000 -v traffic-data:/data -e DJANGO_SECRET_KEY=change-me traffic-analysis
+```
+
+- Give the container at least 2 GB of memory; free tiers with 512 MB are too small.
+- Attach a volume at `/data` so analyses survive restarts.
+- Set `DJANGO_SECRET_KEY` to a fixed secret value, and `DJANGO_ALLOWED_HOSTS` to your
+  domain instead of the default `*`.
 
 ## Limitations
 
