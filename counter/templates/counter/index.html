@@ -1,0 +1,846 @@
+{% verbatim %}<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Traffic Analysis</title>
+<link rel="icon" href="data:,">
+<style>
+  :root {
+    color-scheme: light;
+    --surface: #fcfcfb;
+    --raised: #f3f2ee;
+    --hover: #ecebe6;
+    --ink: #0b0b0b;
+    --ink-2: #52514e;
+    --line: #e4e3df;
+    --line-strong: #b9b7b0;
+    --car: #2a78d6;
+    --motorcycle: #eb6834;
+    --truck: #1baf7a;
+    --button: #0b0b0b;
+    --button-ink: #fcfcfb;
+    --danger: #a52a2a;
+    --count-line: #e0218a;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      color-scheme: dark;
+      --surface: #1a1a19;
+      --raised: #252523;
+      --hover: #30302d;
+      --ink: #f0efec;
+      --ink-2: #c3c2b7;
+      --line: #383835;
+      --line-strong: #5b5a55;
+      --car: #3987e5;
+      --motorcycle: #d95926;
+      --truck: #199e70;
+      --button: #f0efec;
+      --button-ink: #1a1a19;
+      --danger: #ff9a92;
+    }
+  }
+  * { box-sizing: border-box; }
+  [hidden] { display: none !important; }
+  body {
+    margin: 0;
+    background: var(--surface);
+    color: var(--ink);
+    font: 15px/1.45 "Segoe UI", system-ui, sans-serif;
+  }
+  main { max-width: 1240px; margin: 0 auto; padding: 24px 16px 48px; }
+  .brand { font-weight: 700; font-size: 17px; letter-spacing: -0.01em; margin: 0 0 20px; }
+  h1 { font-size: 26px; line-height: 1.2; letter-spacing: -0.02em; margin: 0; overflow-wrap: anywhere; }
+  h2 { font-size: 17px; margin: 0; }
+  .muted { color: var(--ink-2); }
+  .small { font-size: 13px; }
+  #message {
+    border: 1px solid var(--danger); color: var(--danger);
+    padding: 10px 14px; border-radius: 8px; margin-bottom: 16px;
+  }
+
+  button, .button {
+    font: inherit; font-weight: 600; color: var(--ink); background: var(--raised);
+    border: 1px solid var(--line); border-radius: 8px; padding: 9px 14px;
+    cursor: pointer; text-decoration: none; display: inline-block;
+  }
+  button:hover, .button:hover { background: var(--hover); }
+  .primary { background: var(--button); color: var(--button-ink); border-color: var(--button); }
+  .primary:hover { background: var(--button); opacity: .86; }
+  button:disabled { opacity: .5; cursor: progress; }
+  :focus-visible { outline: 2px solid var(--car); outline-offset: 2px; }
+
+  /* Drop */
+  #drop-zone {
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    min-height: min(68vh, 560px); padding: 32px 16px; text-align: center; gap: 10px;
+    border: 2px dashed var(--line-strong); border-radius: 16px; cursor: pointer;
+    transition: background .12s, border-color .12s;
+  }
+  #drop-zone.over, #drop-zone:hover { background: var(--raised); border-color: var(--ink-2); }
+  #drop-zone h1 { font-size: 32px; }
+  #drop-zone p { margin: 0; max-width: 46ch; }
+  #drop-zone svg { width: 54px; height: 54px; color: var(--ink-2); margin-bottom: 6px; }
+
+  /* Setup */
+  .setup { display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: 28px; align-items: start; }
+  .frame { position: relative; line-height: 0; border-radius: 10px; overflow: hidden; background: #000; touch-action: none; }
+  .frame img { width: 100%; display: block; user-select: none; -webkit-user-drag: none; }
+  .frame svg { position: absolute; inset: 0; width: 100%; height: 100%; }
+  .handle { cursor: grab; }
+  .handle:active { cursor: grabbing; }
+  form { display: flex; flex-direction: column; gap: 14px; }
+  label { display: flex; flex-direction: column; gap: 4px; font-size: 13px; font-weight: 600; }
+  input, select {
+    font: inherit; font-weight: 400; color: var(--ink); background: var(--surface);
+    border: 1px solid var(--line-strong); border-radius: 8px; padding: 8px 10px; width: 100%;
+  }
+  label span { font-weight: 400; color: var(--ink-2); }
+  .actions { display: flex; flex-wrap: wrap; gap: 8px; }
+
+  /* Progress */
+  .progress { max-width: 640px; margin: 8vh auto 0; }
+  .bar { height: 8px; background: var(--raised); border-radius: 4px; overflow: hidden; margin: 18px 0 8px; }
+  .bar div { height: 100%; width: 0; background: var(--ink); transition: width .3s; }
+  .live-counts { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin: 26px 0; }
+  .live-counts b { display: block; font-size: 30px; font-variant-numeric: tabular-nums; letter-spacing: -0.02em; }
+
+  /* Results */
+  .result-head { display: flex; flex-wrap: wrap; gap: 12px 24px; justify-content: space-between; align-items: flex-end; margin-bottom: 20px; }
+  .top { display: grid; grid-template-columns: minmax(0, 7fr) minmax(0, 5fr); gap: 24px; align-items: stretch; }
+  video { width: 100%; display: block; border-radius: 10px; background: #000; }
+  .tiles { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; align-content: start; }
+  .tile {
+    text-align: left; font-weight: 400; padding: 12px 14px; border-radius: 10px;
+    background: var(--raised); border: 1px solid transparent;
+  }
+  .tile .name { display: flex; align-items: center; gap: 7px; font-size: 13px; color: var(--ink-2); }
+  .tile .value { display: block; font-size: 28px; font-weight: 700; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; line-height: 1.25; }
+  .tile.wide .value { font-size: 22px; line-height: 1.6; }
+  .tile .note { font-size: 13px; color: var(--ink-2); }
+  button.tile[aria-pressed="false"] { background: none; border-color: var(--line); }
+  button.tile[aria-pressed="false"] .value, button.tile[aria-pressed="false"] .note { opacity: .4; }
+  button.tile[aria-pressed="false"] .swatch { background: none !important; box-shadow: inset 0 0 0 1.5px var(--line-strong); }
+  .swatch { width: 11px; height: 11px; border-radius: 3px; flex: none; }
+
+  .chart-card { margin-top: 30px; }
+  .controls { display: flex; flex-wrap: wrap; gap: 10px 16px; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+  .controls-right { display: flex; flex-wrap: wrap; gap: 10px 16px; align-items: center; }
+  .inline { flex-direction: row; align-items: center; gap: 8px; }
+  .inline select { width: auto; padding: 6px 8px; }
+  .segmented { display: inline-flex; border: 1px solid var(--line-strong); border-radius: 8px; overflow: hidden; }
+  .segmented button { border: 0; border-radius: 0; background: none; font-weight: 500; padding: 6px 12px; font-size: 14px; }
+  .segmented button + button { border-left: 1px solid var(--line-strong); }
+  .segmented button[aria-pressed="true"] { background: var(--ink); color: var(--surface); }
+
+  #chart { position: relative; width: 100%; }
+  #chart svg { display: block; width: 100%; }
+  #chart text { font: 12px "Segoe UI", system-ui, sans-serif; fill: var(--ink-2); }
+  #chart text.peak { fill: var(--ink); font-weight: 700; }
+  .band { cursor: pointer; outline: none; }
+  .band .bg { fill: transparent; }
+  .band:hover .bg, .band:focus .bg { fill: var(--hover); }
+  #tip {
+    position: absolute; pointer-events: none; z-index: 5; min-width: 150px;
+    background: var(--surface); border: 1px solid var(--line-strong); border-radius: 8px;
+    padding: 8px 11px; font-size: 13px; box-shadow: 0 4px 16px rgba(0,0,0,.14);
+  }
+  #tip .head { font-weight: 600; margin-bottom: 4px; white-space: nowrap; }
+  #tip .row { display: flex; align-items: center; gap: 7px; white-space: nowrap; color: var(--ink-2); }
+  #tip .row b { color: var(--ink); min-width: 28px; text-align: right; font-variant-numeric: tabular-nums; }
+  #tip .key { width: 12px; height: 2.5px; border-radius: 2px; }
+  #tip .foot { margin-top: 5px; color: var(--ink-2); font-size: 12px; }
+
+  table { width: 100%; border-collapse: collapse; font-size: 14px; font-variant-numeric: tabular-nums; margin-top: 12px; }
+  th, td { padding: 6px 10px; border-bottom: 1px solid var(--line); text-align: right; }
+  th:first-child, td:first-child { text-align: left; }
+  .table-wrap { overflow-x: auto; }
+  .recent { margin-top: 28px; }
+  .recent ul { list-style: none; padding: 0; margin: 10px 0 0; border-top: 1px solid var(--line); }
+  .recent li { border-bottom: 1px solid var(--line); }
+  .recent button {
+    width: 100%; display: flex; flex-wrap: wrap; justify-content: space-between; gap: 4px 16px;
+    background: none; border: 0; border-radius: 0; padding: 10px 4px; font-weight: 400; text-align: left;
+  }
+  .recent button:hover { background: var(--raised); }
+  .recent .file { font-weight: 600; overflow-wrap: anywhere; }
+  .danger { color: var(--danger); }
+  .downloads { margin-top: 26px; padding-top: 18px; border-top: 1px solid var(--line); }
+  .downloads p { margin: 10px 0 0; }
+
+  @media (max-width: 860px) {
+    .setup, .top { grid-template-columns: minmax(0, 1fr); }
+    h1 { font-size: 22px; }
+    #drop-zone h1 { font-size: 26px; }
+  }
+</style>
+</head>
+<body>
+<main>
+  <p class="brand">Traffic Analysis</p>
+  <div id="message" role="alert" hidden></div>
+
+  <section id="view-drop" class="view">
+    <div id="drop-zone" tabindex="0" role="button" aria-label="Choose a road video to analyse">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 15V4m0 0L8 8m4-4 4 4"/><path d="M4 15v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3"/></svg>
+      <h1 id="drop-title">Drop a road video here</h1>
+      <p class="muted">or click to choose a file. Works best with a fixed camera. Your video stays on this computer.</p>
+    </div>
+    <input id="file" type="file" accept="video/*,.mkv,.ts" hidden>
+    <div id="recent" class="recent" hidden>
+      <h2>Recent analyses</h2>
+      <ul id="recent-list"></ul>
+    </div>
+  </section>
+
+  <section id="view-setup" class="view" hidden>
+    <div class="setup">
+      <div>
+        <div class="frame" id="frame">
+          <img id="frame-img" alt="First frame of the video" draggable="false">
+          <svg id="line-svg" aria-label="Counting line on the first frame"></svg>
+        </div>
+        <p class="muted small">Drag either end of the pink line. Put it across the road where vehicles are large and clearly separated, away from the edges of the picture.</p>
+      </div>
+      <form id="setup-form">
+        <div>
+          <h1 style="font-size:20px" id="setup-name"></h1>
+          <p class="muted small" id="setup-meta" style="margin:4px 0 0"></p>
+        </div>
+        <label>Site name
+          <input id="site" maxlength="120" placeholder="Name of the road or junction">
+        </label>
+        <label>Recording began (East Africa Time)
+          <input id="start-time" type="datetime-local" step="1" required>
+          <span>Filled in from the file's date. Correct it if you know the real time.</span>
+        </label>
+        <label>Speed and accuracy
+          <select id="speed">
+            <option value="fast">Fast: quickest, may miss small vehicles</option>
+            <option value="balanced" selected>Balanced</option>
+            <option value="accurate">Accurate: slowest, best for crowded scenes</option>
+          </select>
+        </label>
+        <label>Report prepared for
+          <input id="recipient" maxlength="200">
+        </label>
+        <div class="actions">
+          <button class="primary" id="start" type="submit">Count vehicles</button>
+          <button type="button" class="restart">Choose another video</button>
+        </div>
+      </form>
+    </div>
+  </section>
+
+  <section id="view-progress" class="view" hidden>
+    <div class="progress">
+      <h1 id="progress-title">Counting vehicles</h1>
+      <div class="bar"><div id="bar"></div></div>
+      <p class="muted" id="progress-text" aria-live="polite" style="margin:0"></p>
+      <div class="live-counts">
+        <div><b id="live-car">0</b><span class="muted">Cars</span></div>
+        <div><b id="live-motorcycle">0</b><span class="muted">Motorcycles</span></div>
+        <div><b id="live-truck">0</b><span class="muted">Trucks</span></div>
+      </div>
+      <button id="cancel" type="button">Cancel</button>
+    </div>
+  </section>
+
+  <section id="view-results" class="view" hidden>
+    <div class="result-head">
+      <div>
+        <h1 id="result-site"></h1>
+        <div class="muted" id="result-period"></div>
+      </div>
+      <div class="actions">
+        <a class="button primary" id="view-pdf" target="_blank" rel="noopener">Open PDF report</a>
+        <button type="button" id="rerun">Change settings and rerun</button>
+        <button type="button" class="restart">New video</button>
+        <button type="button" id="delete" class="danger">Delete</button>
+      </div>
+    </div>
+
+    <div class="top">
+      <video id="video" controls playsinline></video>
+      <div class="tiles" id="tiles"></div>
+    </div>
+
+    <div class="chart-card">
+      <div class="controls">
+        <h2 id="chart-title"></h2>
+        <div class="controls-right">
+          <label class="inline">Period
+            <select id="interval"></select>
+          </label>
+          <div class="segmented" role="group" aria-label="Direction" id="direction">
+            <button type="button" data-direction="" aria-pressed="true">Both ways</button>
+            <button type="button" data-direction="in" aria-pressed="false">In</button>
+            <button type="button" data-direction="out" aria-pressed="false">Out</button>
+          </div>
+        </div>
+      </div>
+      <div id="chart"><div id="tip" hidden></div></div>
+      <p class="muted small" id="chart-note"></p>
+      <button type="button" id="toggle-table" aria-expanded="false">Show table</button>
+      <div class="table-wrap" id="table-wrap" hidden></div>
+    </div>
+
+    <div class="downloads">
+      <h2>Downloads</h2>
+      <div class="actions" style="margin-top:10px">
+        <a class="button" id="dl-video">Counted video</a>
+        <a class="button" id="dl-pdf">PDF report</a>
+        <a class="button" id="dl-chart">Graph image</a>
+        <a class="button" id="dl-table">Data (CSV)</a>
+      </div>
+      <p class="muted small" id="dl-note"></p>
+      <p class="muted small">Counts are automated estimates and have not been audited. Accuracy falls in crowded or low-resolution footage. Buses, bicycles and pedestrians are not counted. Results stay saved on this computer until you delete them.</p>
+    </div>
+  </section>
+</main>
+
+<script>
+const $ = id => document.getElementById(id);
+const TYPES = [
+  { id: "car", label: "Cars", color: "var(--car)" },
+  { id: "motorcycle", label: "Motorcycles", color: "var(--motorcycle)" },
+  { id: "truck", label: "Trucks", color: "var(--truck)" },
+];
+const SVG_NS = "http://www.w3.org/2000/svg";
+const fmt = n => Number(n).toLocaleString("en-US");
+
+let job = null;
+let line = [0, 0.6, 1, 0.6];
+let stats = null;
+let statsRequest = 0;
+const filters = { interval: "auto", direction: "", hidden: new Set() };
+let playhead = null;
+let pollTimer = null;
+
+function showView(name) {
+  document.querySelectorAll(".view").forEach(v => { v.hidden = v.id !== `view-${name}`; });
+  document.body.dataset.view = name;
+}
+function showMessage(text) {
+  $("message").textContent = text || "";
+  $("message").hidden = !text;
+}
+function csrfToken() {
+  const cookie = document.cookie.split("; ").find(c => c.startsWith("csrftoken="));
+  return cookie ? decodeURIComponent(cookie.slice("csrftoken=".length)) : "";
+}
+async function api(url, options = {}) {
+  if (options.method === "POST") options.headers = { ...(options.headers || {}), "X-CSRFToken": csrfToken() };
+  const response = await fetch(url, options);
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(data.error || "Something went wrong. Please try again.");
+  return data;
+}
+function postJson(url, body) {
+  return api(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body || {}) });
+}
+function svgEl(name, attrs, parent) {
+  const node = document.createElementNS(SVG_NS, name);
+  for (const [key, value] of Object.entries(attrs || {})) node.setAttribute(key, value);
+  if (parent) parent.appendChild(node);
+  return node;
+}
+function el(tag, className, text, parent) {
+  const node = document.createElement(tag);
+  if (className) node.className = className;
+  if (text !== undefined) node.textContent = text;
+  if (parent) parent.appendChild(node);
+  return node;
+}
+
+/* Choosing a video */
+const dropZone = $("drop-zone");
+let pendingLastModified = null;
+
+dropZone.addEventListener("click", () => $("file").click());
+dropZone.addEventListener("keydown", e => {
+  if (e.key === "Enter" || e.key === " ") { e.preventDefault(); $("file").click(); }
+});
+$("file").addEventListener("change", () => { if ($("file").files[0]) uploadVideo($("file").files[0]); });
+["dragover", "drop"].forEach(type => window.addEventListener(type, e => e.preventDefault()));
+window.addEventListener("dragenter", () => dropZone.classList.add("over"));
+window.addEventListener("dragleave", e => { if (!e.relatedTarget) dropZone.classList.remove("over"); });
+window.addEventListener("drop", e => {
+  dropZone.classList.remove("over");
+  const file = e.dataTransfer.files[0];
+  if (file && document.body.dataset.view === "drop") uploadVideo(file);
+});
+
+async function uploadVideo(file) {
+  showMessage("");
+  $("drop-title").textContent = `Uploading ${file.name}…`;
+  const form = new FormData();
+  form.append("video", file);
+  try {
+    pendingLastModified = file.lastModified;
+    openSetup(await api("/api/videos", { method: "POST", body: form }));
+  } catch (error) {
+    showMessage(error.message);
+  } finally {
+    $("drop-title").textContent = "Drop a road video here";
+    $("file").value = "";
+  }
+}
+
+/* Setup */
+function toEatInput(ms) {
+  return new Date(ms + 3 * 3600 * 1000).toISOString().slice(0, 19);
+}
+function openSetup(data) {
+  job = data;
+  location.hash = job.id;
+  const saved = job.settings;
+  line = [...(saved.line || job.default_line)];
+  $("frame-img").src = `/api/jobs/${job.id}/frame.jpg`;
+  $("setup-name").textContent = job.filename;
+  $("setup-meta").textContent = `${job.width} × ${job.height} · ${formatDuration(job.duration)}`;
+  $("site").value = saved.site && saved.site !== "Unnamed site" ? saved.site : "";
+  $("start-time").value = saved.start_time || toEatInput(pendingLastModified || Date.now());
+  $("speed").value = saved.speed || "balanced";
+  $("recipient").value = saved.recipient || job.default_recipient;
+  drawLine();
+  showView("setup");
+}
+function formatDuration(seconds) {
+  if (!isFinite(seconds) || seconds <= 0) return "unknown length";
+  const m = Math.floor(seconds / 60), s = Math.round(seconds % 60);
+  return m ? `${m} min ${s} s` : `${s} s`;
+}
+function drawLine() {
+  const svg = $("line-svg");
+  const { width: W, height: H } = job;
+  svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
+  svg.replaceChildren();
+  const px = [line[0] * W, line[1] * H, line[2] * W, line[3] * H];
+  const stroke = Math.max(W / 280, 2);
+  const radius = Math.max(W / 75, 7);
+  svgEl("line", { x1: px[0], y1: px[1], x2: px[2], y2: px[3], stroke: "#fff", "stroke-width": stroke * 2.2, "stroke-linecap": "round" }, svg);
+  svgEl("line", { x1: px[0], y1: px[1], x2: px[2], y2: px[3], stroke: "var(--count-line)", "stroke-width": stroke, "stroke-linecap": "round" }, svg);
+  [0, 1].forEach(end => {
+    const g = svgEl("g", { class: "handle", "data-end": end }, svg);
+    svgEl("circle", { cx: px[end * 2], cy: px[end * 2 + 1], r: radius * 2.4, fill: "transparent" }, g);
+    svgEl("circle", { cx: px[end * 2], cy: px[end * 2 + 1], r: radius, fill: "var(--count-line)", stroke: "#fff", "stroke-width": stroke }, g);
+  });
+}
+let draggedEnd = null;
+$("line-svg").addEventListener("pointerdown", e => {
+  const handle = e.target.closest(".handle");
+  if (!handle) return;
+  draggedEnd = Number(handle.dataset.end);
+  $("line-svg").setPointerCapture(e.pointerId);
+});
+$("line-svg").addEventListener("pointermove", e => {
+  if (draggedEnd === null) return;
+  const box = $("line-svg").getBoundingClientRect();
+  line[draggedEnd * 2] = Math.min(1, Math.max(0, (e.clientX - box.left) / box.width));
+  line[draggedEnd * 2 + 1] = Math.min(1, Math.max(0, (e.clientY - box.top) / box.height));
+  drawLine();
+});
+["pointerup", "pointercancel"].forEach(type => $("line-svg").addEventListener(type, () => { draggedEnd = null; }));
+
+$("setup-form").addEventListener("submit", async e => {
+  e.preventDefault();
+  showMessage("");
+  $("start").disabled = true;
+  try {
+    job = await postJson(`/api/jobs/${job.id}/start`, {
+      site: $("site").value,
+      start_time: $("start-time").value,
+      speed: $("speed").value,
+      recipient: $("recipient").value,
+      line,
+    });
+    showView("progress");
+    renderProgress();
+    pollJob();
+  } catch (error) {
+    showMessage(error.message);
+  } finally {
+    $("start").disabled = false;
+  }
+});
+
+/* Progress */
+function renderProgress() {
+  const done = job.frames_done, total = job.total_frames;
+  $("bar").style.width = total ? `${Math.min(100, done / total * 100)}%` : "0";
+  let text = "Preparing the model…";
+  if (done) {
+    const left = total > done ? (job.elapsed / done) * (total - done) : 0;
+    const remaining = left >= 90 ? `about ${Math.round(left / 60)} min left` : left > 0 ? `about ${Math.max(5, Math.round(left / 5) * 5)} s left` : "finishing up";
+    text = `Frame ${fmt(done)} of ${fmt(total)}, ${remaining}`;
+  }
+  $("progress-text").textContent = text;
+  TYPES.forEach(t => { $(`live-${t.id}`).textContent = fmt(job.counts[t.id] || 0); });
+}
+function pollJob() {
+  clearTimeout(pollTimer);
+  pollTimer = setTimeout(async () => {
+    try {
+      job = await api(`/api/jobs/${job.id}`);
+    } catch (error) {
+      showMessage("Lost contact with the app. Is it still running?");
+      pollJob();
+      return;
+    }
+    routeJob();
+  }, 700);
+}
+function routeJob() {
+  if (job.status === "processing") { showView("progress"); renderProgress(); pollJob(); }
+  else if (job.status === "done") openResults();
+  else {
+    if (job.status === "failed") showMessage(job.error);
+    pendingLastModified = null;
+    openSetup(job);
+  }
+}
+$("cancel").addEventListener("click", async () => {
+  $("progress-title").textContent = "Cancelling…";
+  await postJson(`/api/jobs/${job.id}/cancel`).catch(() => {});
+});
+
+/* Results */
+async function openResults() {
+  showMessage("");
+  $("progress-title").textContent = "Counting vehicles";
+  filters.interval = "auto";
+  filters.direction = "";
+  filters.hidden.clear();
+  location.hash = job.id;
+  $("result-site").textContent = job.settings.site;
+  $("video").src = `/api/jobs/${job.id}/video?run=${job.run}`;
+  showView("results");
+  syncDirection();
+  await loadStats();
+}
+function syncDirection() {
+  $("direction").querySelectorAll("button").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.direction === filters.direction)));
+}
+async function loadStats() {
+  const request = ++statsRequest;
+  const params = new URLSearchParams({ interval: filters.interval });
+  if (filters.direction) params.set("direction", filters.direction);
+  params.set("types", TYPES.filter(t => !filters.hidden.has(t.id)).map(t => t.id).join(","));
+  try {
+    const data = await api(`/api/jobs/${job.id}/stats?${params}`);
+    if (request !== statsRequest) return;
+    stats = data;
+    renderResults();
+  } catch (error) {
+    showMessage(error.message);
+  }
+}
+function renderResults() {
+  $("result-period").textContent = `${formatStamp(stats.start)} to ${formatStamp(stats.end, true)}, East Africa Time`;
+  $("chart-title").textContent = `Vehicles by ${stats.interval_name} period`;
+  renderIntervalOptions();
+  renderTiles();
+  drawChart();
+  renderTable();
+  renderDownloads();
+}
+function formatStamp(iso, timeOnly) {
+  const d = new Date(iso);
+  const time = d.toLocaleTimeString("en-GB");
+  return timeOnly ? time : `${d.toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })} ${time}`;
+}
+function renderIntervalOptions() {
+  const select = $("interval");
+  select.replaceChildren();
+  const current = `${stats.interval_seconds}s`;
+  stats.interval_options.forEach(option => {
+    const node = el("option", "", `Every ${option.label}`, select);
+    node.value = option.value;
+    node.selected = option.value === current;
+  });
+}
+function renderTiles() {
+  const box = $("tiles");
+  box.replaceChildren();
+  const all = TYPES.reduce((sum, t) => sum + stats.type_totals[t.id], 0);
+
+  const total = el("div", "tile", undefined, box);
+  el("span", "name", "Total vehicles", total);
+  el("span", "value", fmt(stats.total), total);
+  el("span", "note", filters.hidden.size ? "selected types" : "crossed the line", total);
+
+  const busiest = el("div", "tile wide", undefined, box);
+  el("span", "name", "Busiest period", busiest);
+  el("span", "value", stats.peak ? stats.peak.label : "None", busiest);
+  el("span", "note", stats.peak ? `${fmt(stats.peak.total)} vehicles` : "no vehicles counted", busiest);
+
+  TYPES.forEach(t => {
+    const tile = el("button", "tile", undefined, box);
+    tile.type = "button";
+    tile.setAttribute("aria-pressed", String(!filters.hidden.has(t.id)));
+    tile.title = `Show or hide ${t.label.toLowerCase()} in the graph`;
+    const name = el("span", "name", undefined, tile);
+    el("span", "swatch", undefined, name).style.background = t.color;
+    name.appendChild(document.createTextNode(t.label));
+    el("span", "value", fmt(stats.type_totals[t.id]), tile);
+    el("span", "note", all ? `${Math.round(stats.type_totals[t.id] / all * 100)}% of traffic` : "no vehicles", tile);
+    tile.addEventListener("click", () => {
+      filters.hidden.has(t.id) ? filters.hidden.delete(t.id) : filters.hidden.add(t.id);
+      loadStats();
+    });
+  });
+}
+function niceScale(max) {
+  if (max <= 5) return { top: 5, step: 1 };
+  const rough = max / 5;
+  const power = 10 ** Math.floor(Math.log10(rough));
+  const step = [1, 2, 2.5, 5, 10].map(m => m * power).find(s => s >= rough && Number.isInteger(s)) || Math.ceil(rough);
+  return { top: Math.ceil(max / step) * step, step };
+}
+function topRounded(x, y, w, h, r) {
+  r = Math.min(r, h, w / 2);
+  return `M${x},${y + h}V${y + r}Q${x},${y} ${x + r},${y}H${x + w - r}Q${x + w},${y} ${x + w},${y + r}V${y + h}Z`;
+}
+function drawChart() {
+  const box = $("chart");
+  const old = box.querySelector("svg");
+  if (old) old.remove();
+  hideTip();
+  const W = box.clientWidth;
+  if (!W || !stats) return;
+  const H = Math.max(260, Math.min(360, W * 0.36));
+  const m = { left: 48, right: 8, top: 26, bottom: 30 };
+  const plotW = W - m.left - m.right, plotH = H - m.top - m.bottom;
+  const visible = TYPES.filter(t => !filters.hidden.has(t.id));
+  const { buckets } = stats;
+  const scale = niceScale(Math.max(1, ...buckets.map(b => b.total)));
+  const y = v => m.top + plotH - (v / scale.top) * plotH;
+  const band = plotW / buckets.length;
+  const barW = Math.max(2, Math.min(24, band * 0.72));
+
+  const svg = svgEl("svg", { width: W, height: H, viewBox: `0 0 ${W} ${H}`, role: "img", "aria-label": `Stacked columns of vehicles per ${stats.interval_name} period. Full figures are in the table.` });
+  box.insertBefore(svg, $("tip"));
+
+  for (let v = 0; v <= scale.top + 1e-9; v += scale.step) {
+    svgEl("line", { x1: m.left, x2: W - m.right, y1: y(v) + 0.5, y2: y(v) + 0.5, stroke: "var(--line)" }, svg);
+    svgEl("text", { x: m.left - 8, y: y(v) + 4, "text-anchor": "end" }, svg).textContent = fmt(v);
+  }
+
+  const tickChars = Math.max(...buckets.map(b => b.tick.length));
+  const every = Math.max(1, Math.ceil(buckets.length * (tickChars * 7 + 14) / plotW));
+
+  buckets.forEach((bucket, i) => {
+    const x = m.left + i * band;
+    const center = x + band / 2;
+    const group = svgEl("g", { class: "band", tabindex: 0, "aria-label": `${bucket.label}: ${bucket.total} vehicles. Press Enter to watch this moment.` }, svg);
+    svgEl("rect", { class: "bg", x, y: m.top - 8, width: band, height: plotH + 8 }, group);
+
+    const shown = visible.filter(t => bucket.counts[t.id] > 0);
+    let stack = 0;
+    shown.forEach((t, index) => {
+      const yTop = y(stack + bucket.counts[t.id]);
+      const yBottom = y(stack);
+      stack += bucket.counts[t.id];
+      const gap = index === shown.length - 1 ? 0 : 2;
+      const top = yTop + gap;
+      const height = Math.max(1, yBottom - top);
+      const attrs = { fill: t.color, opacity: bucket.partial ? 0.42 : 1 };
+      if (index === shown.length - 1) svgEl("path", { ...attrs, d: topRounded(center - barW / 2, top, barW, height, 4) }, group);
+      else svgEl("rect", { ...attrs, x: center - barW / 2, y: top, width: barW, height }, group);
+    });
+
+    group.addEventListener("pointermove", e => showTip(bucket, e.clientX, e.clientY));
+    group.addEventListener("pointerleave", hideTip);
+    group.addEventListener("focus", () => { const r = group.getBoundingClientRect(); showTip(bucket, r.left + r.width / 2, r.top + 40); });
+    group.addEventListener("blur", hideTip);
+    group.addEventListener("click", () => seekTo(bucket));
+    group.addEventListener("keydown", e => { if (e.key === "Enter") seekTo(bucket); });
+
+    if (i % every === 0) svgEl("text", { x: center, y: H - 10, "text-anchor": "middle" }, svg).textContent = bucket.tick;
+  });
+
+  if (stats.peak) {
+    const center = m.left + (stats.peak.index + 0.5) * band;
+    const anchor = center < 60 + m.left ? "start" : center > W - 70 ? "end" : "middle";
+    const label = svgEl("text", { class: "peak", x: anchor === "start" ? center - barW / 2 : anchor === "end" ? center + barW / 2 : center, y: y(stats.peak.total) - 7, "text-anchor": anchor }, svg);
+    label.textContent = `Busiest: ${fmt(stats.peak.total)}`;
+  }
+
+  playhead = svgEl("line", { y1: m.top - 8, y2: m.top + plotH, stroke: "var(--ink)", "stroke-width": 1.5, "pointer-events": "none", visibility: "hidden" }, svg);
+  playhead.dataset.left = m.left;
+  playhead.dataset.band = band;
+  updatePlayhead();
+
+  const partial = buckets.some(b => b.partial);
+  $("chart-note").textContent = (visible.length ? "Hover over a column for details. Click it to jump to that moment in the video." : "Select a vehicle type above to show it in the graph.")
+    + (partial ? " Paler columns were only partly monitored, so they understate traffic." : "")
+    + " In means moving down or right in the picture; Out means moving up or left.";
+}
+function updatePlayhead() {
+  if (!playhead || !stats || !isFinite($("video").duration) || $("video").currentTime === 0) {
+    if (playhead) playhead.setAttribute("visibility", "hidden");
+    return;
+  }
+  const t = $("video").currentTime;
+  const { buckets, interval_seconds: size } = stats;
+  let i = buckets.length - 1;
+  while (i > 0 && buckets[i].offset > t) i--;
+  const next = i + 1 < buckets.length ? buckets[i + 1].offset : buckets[i].offset + size;
+  const fraction = Math.min(1, (t - buckets[i].offset) / Math.max(next - buckets[i].offset, 0.001));
+  const x = Number(playhead.dataset.left) + (i + fraction) * Number(playhead.dataset.band);
+  playhead.setAttribute("x1", x);
+  playhead.setAttribute("x2", x);
+  playhead.setAttribute("visibility", "visible");
+}
+function seekTo(bucket) {
+  const video = $("video");
+  video.currentTime = Math.min(bucket.offset, Math.max((video.duration || 0) - 0.05, 0));
+  video.scrollIntoView({ behavior: "smooth", block: "nearest" });
+  updatePlayhead();
+}
+function showTip(bucket, clientX, clientY) {
+  const tip = $("tip");
+  tip.replaceChildren();
+  el("div", "head", bucket.label, tip);
+  TYPES.filter(t => !filters.hidden.has(t.id)).forEach(t => {
+    const row = el("div", "row", undefined, tip);
+    el("span", "key", undefined, row).style.background = t.color;
+    el("b", "", fmt(bucket.counts[t.id]), row);
+    row.appendChild(document.createTextNode(t.label));
+  });
+  const total = el("div", "row", undefined, tip);
+  el("span", "key", undefined, total);
+  el("b", "", fmt(bucket.total), total);
+  total.appendChild(document.createTextNode("Total"));
+  el("div", "foot", bucket.partial ? "Only partly monitored" : `In ${fmt(bucket.in)} · Out ${fmt(bucket.out)}`, tip);
+
+  tip.hidden = false;
+  const box = $("chart").getBoundingClientRect();
+  const x = clientX - box.left, yPos = clientY - box.top;
+  const left = x + tip.offsetWidth + 18 > box.width ? x - tip.offsetWidth - 12 : x + 12;
+  tip.style.left = `${Math.max(0, left)}px`;
+  tip.style.top = `${Math.max(0, Math.min(yPos - 20, box.height - tip.offsetHeight))}px`;
+}
+function hideTip() { $("tip").hidden = true; }
+
+function renderTable() {
+  const wrap = $("table-wrap");
+  wrap.replaceChildren();
+  const table = el("table", "", undefined, wrap);
+  const head = el("tr", "", undefined, el("thead", "", undefined, table));
+  ["Period", ...TYPES.map(t => t.label), "Total", "In", "Out"].forEach(h => { el("th", "", h, head).scope = "col"; });
+  const body = el("tbody", "", undefined, table);
+  stats.buckets.forEach(b => {
+    const row = el("tr", "", undefined, body);
+    el("td", "", b.label + (b.partial ? " *" : ""), row);
+    TYPES.forEach(t => el("td", "", fmt(b.counts[t.id]), row));
+    el("td", "", fmt(b.total), row).style.fontWeight = "700";
+    el("td", "", fmt(b.in), row);
+    el("td", "", fmt(b.out), row);
+  });
+  if (stats.buckets.some(b => b.partial)) el("p", "muted small", "* Period only partly monitored.", wrap);
+}
+$("toggle-table").addEventListener("click", () => {
+  const wrap = $("table-wrap");
+  wrap.hidden = !wrap.hidden;
+  $("toggle-table").setAttribute("aria-expanded", String(!wrap.hidden));
+  $("toggle-table").textContent = wrap.hidden ? "Show table" : "Hide table";
+});
+function renderDownloads() {
+  const base = `/api/jobs/${job.id}`;
+  const interval = `interval=${stats.interval_seconds}s`;
+  $("view-pdf").href = `${base}/download/pdf?${interval}&inline=1`;
+  $("dl-video").href = `${base}/video?download=1`;
+  $("dl-pdf").href = `${base}/download/pdf?${interval}`;
+  $("dl-chart").href = `${base}/download/chart?${interval}`;
+  $("dl-table").href = `${base}/download/table?${interval}`;
+  $("dl-note").textContent = `The report, graph image and data use the ${stats.interval_name} periods selected above and always include every vehicle type and both directions.`;
+}
+
+$("interval").addEventListener("change", () => { filters.interval = $("interval").value; loadStats(); });
+$("direction").addEventListener("click", e => {
+  const button = e.target.closest("button");
+  if (!button) return;
+  filters.direction = button.dataset.direction;
+  syncDirection();
+  loadStats();
+});
+$("video").addEventListener("timeupdate", updatePlayhead);
+$("video").addEventListener("seeked", updatePlayhead);
+new ResizeObserver(() => { if (document.body.dataset.view === "results") drawChart(); }).observe($("chart"));
+
+$("rerun").addEventListener("click", () => {
+  $("video").pause();
+  pendingLastModified = null;
+  openSetup(job);
+});
+function backToStart() {
+  $("video").pause();
+  $("video").removeAttribute("src");
+  job = null;
+  stats = null;
+  history.replaceState(null, "", location.pathname);
+  showView("drop");
+  loadRecent();
+}
+document.querySelectorAll(".restart").forEach(b => b.addEventListener("click", () => { showMessage(""); backToStart(); }));
+$("delete").addEventListener("click", async () => {
+  if (!confirm(`Delete the analysis of ${job.filename}? This removes its video and results.`)) return;
+  try {
+    await postJson(`/api/jobs/${job.id}/delete`);
+    showMessage("");
+    backToStart();
+  } catch (error) {
+    showMessage(error.message);
+  }
+});
+
+const STATUS_TEXT = { ready: "Not counted yet", processing: "Processing", failed: "Failed" };
+async function loadRecent() {
+  let data;
+  try {
+    data = await api("/api/jobs");
+  } catch {
+    return;
+  }
+  const list = $("recent-list");
+  list.replaceChildren();
+  data.jobs.forEach(item => {
+    const button = el("button", "", undefined, el("li", "", undefined, list));
+    button.type = "button";
+    const left = el("span", "", undefined, button);
+    const site = item.settings.site && item.settings.site !== "Unnamed site" ? item.settings.site : "";
+    el("span", "file", site || item.filename, left);
+    if (site) el("span", "muted", `  ${item.filename}`, left);
+    const when = new Date(item.created).toLocaleString("en-GB", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" });
+    const result = item.status === "done" ? `${fmt(item.total_vehicles)} vehicles` : STATUS_TEXT[item.status];
+    el("span", "muted", `${result} · ${when}`, button);
+    button.addEventListener("click", () => {
+      job = item;
+      location.hash = item.id;
+      pendingLastModified = null;
+      routeJob();
+    });
+  });
+  $("recent").hidden = data.jobs.length === 0;
+}
+
+/* Coming back to a job after a page refresh */
+(async function start() {
+  showView("drop");
+  loadRecent();
+  const id = location.hash.slice(1);
+  if (!id) return;
+  try {
+    job = await api(`/api/jobs/${id}`);
+    routeJob();
+  } catch {
+    history.replaceState(null, "", location.pathname);
+  }
+})();
+</script>
+</body>
+</html>
+{% endverbatim %}
