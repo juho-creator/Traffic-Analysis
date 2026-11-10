@@ -1,0 +1,5 @@
+django>=5.2,<6
+ultralytics>=8.4.115
+lap>=0.5.12
+imageio-ffmpeg>=0.5
+matplotlib>=3.7

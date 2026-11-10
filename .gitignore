@@ -1,0 +1,28 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# Django
+db.sqlite3
+db.sqlite3-journal
+media/
+staticfiles/
+
+# Model weights are downloaded on first use
+weights/
+*.pt
+
+# Videos and generated output
+*.mp4
+*.mov
+*.avi
+*.mkv
+output/
+
+# Editors and OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
