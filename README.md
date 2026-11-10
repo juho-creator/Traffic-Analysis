@@ -121,7 +121,9 @@ docker build -t traffic-analysis .
 docker run -p 8000:8000 -v traffic-data:/data -e DJANGO_SECRET_KEY=change-me traffic-analysis
 ```
 
-- Give the container at least 2 GB of memory; free tiers with 512 MB are too small.
+- Give the container at least 1 GB of memory, and 2 GB for the Accurate setting. One
+  analysis peaks at about 700 MB (Fast) or 800 MB (Balanced) on a 1080p video; with
+  less memory the host stops the server mid-analysis. Free tiers with 512 MB are too small.
 - Attach a volume at `/data` so analyses survive restarts.
 - Set `DJANGO_SECRET_KEY` to a fixed secret value, and `DJANGO_ALLOWED_HOSTS` to your
   domain instead of the default `*`.

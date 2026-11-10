@@ -145,7 +145,7 @@ def count_traffic(
             quality=6,
             macro_block_size=2,
             ffmpeg_log_level="error",
-            output_params=["-movflags", "+faststart"],
+            output_params=["-preset", "veryfast", "-threads", "2", "-movflags", "+faststart"],
         )
         writer.send(None)  # start ffmpeg
 

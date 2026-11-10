@@ -9,7 +9,7 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     DJANGO_BEHIND_HTTPS_PROXY=1 \
     DJANGO_DB_PATH=/data/db.sqlite3 \
     TRAFFIC_MEDIA_ROOT=/data/media \
-    TRAFFIC_WEIGHTS_DIR=/app/weights
+    TRAFFIC_WEIGHTS_DIR=/app/weights \n    MALLOC_ARENA_MAX=2
 
 # OpenCV needs these system libraries
 RUN apt-get update \
